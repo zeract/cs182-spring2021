@@ -137,7 +137,19 @@ class CaptioningRNN(object):
         # defined above to store loss and gradients; grads[k] should give the      #
         # gradients for self.params[k].                                            #
         ############################################################################
-        pass
+        if self.cell_type == 'rnn':
+            #forward pass
+            initial_hidden = np.dot(features,W_proj)+b_proj
+            initial_cache = (features,W_proj,b_proj)
+            word_vector,word_cache = word_embedding_forward(captions_in,W_embed)
+            h,rnn_cache = rnn_forward(word_vector,initial_hidden,Wx,Wh,b)
+            vocab,vocab_cache = temporal_affine_forward(h,W_vocab,b_vocab)
+            loss,dx = temporal_softmax_loss(vocab,captions_out,mask)
+            #backward pass
+            dout1,grads['W_vocab'],grads['b_vocab']=temporal_affine_backward(dx,vocab_cache)
+            dout2,dh,grads['Wx'],grads['Wh'],grads['b']=rnn_backward(dout1,rnn_cache)
+            grads['W_embed'] = word_embedding_backward(dout2,word_cache)
+            _,grads['W_proj'],grads['b_proj'] = affine_backward(dh,initial_cache)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -199,7 +211,7 @@ class CaptioningRNN(object):
         # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
         # a loop.                                                                 #
         ###########################################################################
-        pass
+        
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
