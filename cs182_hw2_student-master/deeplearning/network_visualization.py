@@ -31,7 +31,13 @@ def compute_saliency_maps(X, y, model):
     # to each input image. You first want to compute the loss over the correct   #
     # scores, and then compute the gradients with torch.autograd.gard.           #
     ##############################################################################
-    pass
+    N,_,H,W = X.shape
+    saliency = torch.zeros(N,H,W)
+    logits = model.forward(X)    #计算得到scores,得到的shape为(N,C)
+    logits = logits.gather(1, y.view(-1, 1)).squeeze() # 得到正确分类
+    logits.backward(torch.FloatTensor([1., 1., 1., 1., 1.])) # 只计算正确分类部分的loss
+    saliency = abs(X.grad.data) # 返回X的梯度绝对值大小
+    saliency, _ = torch.max(saliency, dim=1)
     ##############################################################################
     #                             END OF YOUR CODE                               #
     ##############################################################################
@@ -69,7 +75,16 @@ def make_fooling_image(X, target_y, model):
     # in fewer than 100 iterations of gradient ascent.                           #
     # You can print your progress over iterations to check your algorithm.       #
     ##############################################################################
-    pass
+    for i in range(100):
+        scores = model.forward(X_fooling)
+        if target_y == scores.argmax(dim=1):
+            break;
+        target_scores = scores[0,target_y]
+        X_fooling.retain_grad()
+        target_scores.backward()
+        g = X_fooling.grad.data
+        dX = learning_rate * g / torch.norm(g,p=2)
+        X_fooling = X_fooling + dX
     ##############################################################################
     #                             END OF YOUR CODE                               #
     ##############################################################################
@@ -98,7 +113,11 @@ def update_class_visulization(model, target_y, l2_reg, learning_rate, img):
     # L2 regularization term!                                              #
     # Be very careful about the signs of elements in your code.            #
     ########################################################################
-    pass
+    scores = model.forward(img)  #计算scores
+    target_score = scores[0,target_y] 
+    target_score.backward()
+    dimg = learning_rate*img.grad.data/torch.norm(img.grad.data,p=2)
+    img = img+dimg+l2_reg*img.grad.data
     ########################################################################
     #                             END OF YOUR CODE                         #
     ########################################################################

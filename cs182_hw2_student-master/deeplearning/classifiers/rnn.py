@@ -150,6 +150,19 @@ class CaptioningRNN(object):
             dout2,dh,grads['Wx'],grads['Wh'],grads['b']=rnn_backward(dout1,rnn_cache)
             grads['W_embed'] = word_embedding_backward(dout2,word_cache)
             _,grads['W_proj'],grads['b_proj'] = affine_backward(dh,initial_cache)
+        if self.cell_type == 'lstm':
+            #forward pass
+            initial_hidden = np.dot(features,W_proj)+b_proj
+            initial_cache = (features,W_proj,b_proj)
+            word_vector,word_cache = word_embedding_forward(captions_in,W_embed)
+            h,rnn_cache = lstm_forward(word_vector,initial_hidden,Wx,Wh,b)
+            vocab,vocab_cache = temporal_affine_forward(h,W_vocab,b_vocab)
+            loss,dx = temporal_softmax_loss(vocab,captions_out,mask)
+            #backward pass
+            dout1,grads['W_vocab'],grads['b_vocab']=temporal_affine_backward(dx,vocab_cache)
+            dout2,dh,grads['Wx'],grads['Wh'],grads['b']=lstm_backward(dout1,rnn_cache)
+            grads['W_embed'] = word_embedding_backward(dout2,word_cache)
+            _,grads['W_proj'],grads['b_proj'] = affine_backward(dh,initial_cache)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -211,7 +224,37 @@ class CaptioningRNN(object):
         # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
         # a loop.                                                                 #
         ###########################################################################
-        
+        N,D = features.shape
+        if self.cell_type == 'rnn':
+            initial_hidden = np.dot(features,W_proj)+b_proj
+            for i in range(max_length):
+                if i==0:
+                    #captions[:,i] = self._start
+                    word_vector,word_cache = word_embedding_forward(self._start,W_embed)
+                    next_h, rnn_cache = rnn_step_forward(word_vector, initial_hidden, Wx, Wh, b)
+                    vocab,vocab_cache = affine_forward(next_h,W_vocab,b_vocab)
+                    captions[:,i] = vocab==np.max(vocab,axis=1)
+                else:
+                    word_vector,word_cache = word_embedding_forward(captions[:,i],W_embed)
+                    next_h, rnn_cache = rnn_step_forward(word_vector, initial_hidden, Wx, Wh, b)
+                    vocab,vocab_cache = affine_forward(next_h,W_vocab,b_vocab)
+                    captions[:,i] = vocab==np.max(vocab,axis=1)
+            
+        if self.cell_type == 'lstm':
+            initial_hidden = np.dot(features,W_proj)+b_proj
+            initial_cell = np.zeros(initial_hidden.shape)
+            for i in range(max_length):
+                if i==0:
+                    #captions[:,i] = self._start
+                    word_vector,word_cache = word_embedding_forward(self._start,W_embed)
+                    next_h, next_c, lstm_cache = lstm_step_forward(word_vector, initial_hidden, initial_cell, Wx, Wh, b)
+                    vocab,vocab_cache = affine_forward(next_h,W_vocab,b_vocab)
+                    captions[:,i] = vocab==np.max(vocab,axis=1)
+                else:
+                    word_vector,word_cache = word_embedding_forward(captions[:,i],W_embed)
+                    next_h, next_c, lstm_cache = lstm_step_forward(word_vector, initial_hidden, next_c, Wx, Wh, b)
+                    vocab,vocab_cache = affine_forward(next_h,W_vocab,b_vocab)
+                    captions[:,i] = vocab==np.max(vocab,axis=1)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
